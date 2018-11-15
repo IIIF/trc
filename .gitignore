@@ -1,3 +1,9 @@
+
+# Configuration files
+
+code/iiif-gspread-credentials.json
+code/token.txt
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

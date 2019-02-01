@@ -3,6 +3,9 @@ from github import Github
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
+CURR_MILESTONE = 1
+POST_TO_ISSUE_1 = False
+
 # Pull in list of github accounts from the registration spreadsheet
 scope = ['https://spreadsheets.google.com/feeds',
          'https://www.googleapis.com/auth/drive']
@@ -28,16 +31,15 @@ gh = Github(userName, pw)
 repo = gh.get_repo("%s/%s" % (orgName, repoName))
 
 # Find the issues for the current call
-
-CURR_MILESTONE = 1
 milestone = repo.get_milestone(CURR_MILESTONE)
 issuelist = repo.get_issues(milestone=milestone)
 
-print("## Results for %s" % milestone.title)
-print("")
-print("### Eligible Voters: %s" % len(trc_accounts))
-print(" ".join(sorted(trc_accounts)))
-print()
+report = []
+report.append("## Results for %s" % milestone.title)
+report.append("")
+report.append("### Eligible Voters: %s" % len(trc_accounts))
+report.append(" ".join(sorted(trc_accounts)))
+report.append("")
 
 active = {}
 non_trc = {}
@@ -80,24 +82,35 @@ for issue in issues:
 			if d in vv:
 				vv.remove(d)
 
-	print("### Issue %s (%s)" % (issue.number, issue.title))
-	print("  +1: %s [%s]" % (len(votes['+1']), ' '.join(sorted(votes['+1']))))
-	print("   0: %s [%s]" % (len(votes['0']), ' '.join(sorted(votes['0']))))
-	print("  -1: %s [%s]" % (len(votes['-1']), ' '.join(sorted(votes['-1']))))
-	print()
+	report.append("### Issue %s (%s)" % (issue.number, issue.title))
+	report.append("  +1: %s [%s]" % (len(votes['+1']), ' '.join(sorted(votes['+1']))))
+	report.append("   0: %s [%s]" % (len(votes['0']), ' '.join(sorted(votes['0']))))
+	report.append("  -1: %s [%s]" % (len(votes['-1']), ' '.join(sorted(votes['-1']))))
+	report.append("")
 
 	for comment in comments:
 		who = comment.user.login
 		if who in trc_accounts:
 			active[who] = 1
 
-print("### Active on Issues")
+report.append("### Active on Issues")
 active_accounts = sorted(active.keys())
-print(" ".join(active_accounts))
-print()
-print("### Inactive")
-print(" ".join(sorted(list(set(trc_accounts) - set(active_accounts)))))
-print()
-print("### Discarded as Ineligible")
-print(" ".join(sorted(non_trc.keys())))
+report.append(" ".join(active_accounts))
+report.append("")
+report.append("### Inactive")
+report.append(" ".join(sorted(list(set(trc_accounts) - set(active_accounts)))))
+report.append("")
+report.append("### Discarded as Ineligible")
+report.append(" ".join(sorted(non_trc.keys())))
 
+report_str = '\n'.join(report)
+
+# milestone.edit(milestone.title, description=report_str)
+# FIXME: milestone description doesn't support markdown
+# so where to keep the report?
+
+if POST_TO_ISSUE_1:
+	issue = repo.get_issue(1)
+	issue.create_comment(report_str)
+else:
+	print(report_str)

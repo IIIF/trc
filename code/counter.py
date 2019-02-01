@@ -14,6 +14,9 @@ trc_accounts = set(sheet.col_values(4))
 trc_accounts.remove('')
 trc_accounts.remove('Github')
 
+# FIXME:  Need to record actives and then check to see who is eligible from the full set
+# This needs discussion as to the appropriate persistence mechanism
+
 # Now configure github and repo
 orgName = "iiif"
 repoName = "trc"
@@ -30,9 +33,19 @@ CURR_MILESTONE = 1
 milestone = repo.get_milestone(CURR_MILESTONE)
 issuelist = repo.get_issues(milestone=milestone)
 
-active = {}
+print("## Results for %s" % milestone.title)
+print("")
+print("### Eligible Voters: %s" % len(trc_accounts))
+print(" ".join(sorted(trc_accounts)))
+print()
 
-for issue in list(issuelist):
+active = {}
+non_trc = {}
+
+issues = list(issuelist)
+issues.sort(key=lambda x: x.number)
+
+for issue in issues:
 	reactions = list(issue.get_reactions())
 	comments = list(issue.get_comments())
 
@@ -51,6 +64,8 @@ for issue in list(issuelist):
 				which = '+1'
 			if which in votes:
 				votes[which].add(who)
+		else:
+			non_trc[who] = 1
 
 	# invalid state:
 	#   same user casting multiple votes
@@ -65,11 +80,24 @@ for issue in list(issuelist):
 			if d in vv:
 				vv.remove(d)
 
-	print(issue.number, votes)
+	print("### Issue %s (%s)" % (issue.number, issue.title))
+	print("  +1: %s [%s]" % (len(votes['+1']), ' '.join(sorted(votes['+1']))))
+	print("   0: %s [%s]" % (len(votes['0']), ' '.join(sorted(votes['0']))))
+	print("  -1: %s [%s]" % (len(votes['-1']), ' '.join(sorted(votes['-1']))))
+	print()
 
 	for comment in comments:
 		who = comment.user.login
 		if who in trc_accounts:
 			active[who] = 1
 
-print(active)
+print("### Active on Issues")
+active_accounts = sorted(active.keys())
+print(" ".join(active_accounts))
+print()
+print("### Inactive")
+print(" ".join(sorted(list(set(trc_accounts) - set(active_accounts)))))
+print()
+print("### Discarded as Ineligible")
+print(" ".join(sorted(non_trc.keys())))
+

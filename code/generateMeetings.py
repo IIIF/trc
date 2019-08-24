@@ -10,7 +10,7 @@ def timezone(timeInstance, timezone):
 
 if __name__ == "__main__":
     if len(sys.argv) != 3 and len(sys.argv) != 4:
-        print ('Usage:\n\t./code/calendar.py [start_date YYYY-MM-DD] [Occurrence count] [Japan time frequency]')
+        print ('Usage:\n\t./code/generateMeetings.py [start_date YYYY-MM-DD] [Occurrence count] [Japan time frequency]')
         sys.exit(0)
 
     if len(sys.argv) == 3:
@@ -36,7 +36,19 @@ if __name__ == "__main__":
         e = Event()
         e.name = 'IIIF Technical Review Committee'
         e.begin = next_meeting
+        e.end = next_meeting + timedelta(hours=1)
         cal.events.add(e)
+        e = Event()
+        e.name = 'IIIF TRC issues shared'
+        e.begin = issues_shared
+        e.make_all_day()
+        cal.events.add(e)
+        e = Event()
+        e.name = 'IIIF TRC voting closes'
+        e.begin = voting_closes
+        e.make_all_day()
+        cal.events.add(e)
+
         next_meeting += timedelta(days=4*7)
 
     with open('/tmp/trc.ics', 'w') as ics_file:

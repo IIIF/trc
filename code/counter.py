@@ -7,8 +7,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 # gspread lib is: https://github.com/burnash/gspread
 
 
-CURR_MILESTONE = 5
-POST_TO_ISSUES = False
+CURR_MILESTONE = 7
+POST_TO_ISSUES = True
 
 # Pull in list of github accounts from the registration spreadsheet
 scope = ['https://spreadsheets.google.com/feeds',
@@ -113,10 +113,10 @@ for issue in issues:
 	against = len(votes['0']) + len(votes['-1'])
 	favor = len(votes['+1'])
 	issue_report.append("### Result: %s / %s = %0.2f" % (favor, against+favor, float(favor) / (against+favor)))
-	if float(favor) / (against + favor) > 0.65:
+	if float(favor) / (against + favor) >= 0.6665:
 		issue_report.append("Super majority is in favor, issue is approved")
 		tag = "Approved"
-	elif float(favor) / (against + favor) > 0.49:
+	elif float(favor) / (against + favor) >= 0.5:
 		issue_report.append("No super majority, issue is referred to ex officio for decision")
 		tag = "Ex Officio Decision"
 	else:

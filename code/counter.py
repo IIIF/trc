@@ -1,14 +1,17 @@
 
 from github import Github
 import gspread
+import sys
+import standing
 from oauth2client.service_account import ServiceAccountCredentials
 
 # github lib is: https://pygithub.readthedocs.io/en/latest/
 # gspread lib is: https://github.com/burnash/gspread
+# Need to refactor away from gspread as it uses up teh quota pritty quickly.
 
-
-CURR_MILESTONE = 7
-POST_TO_ISSUES = True
+# Change this to other milestones
+CURR_MILESTONE = 12
+POST_TO_ISSUES = True 
 
 # Pull in list of github accounts from the registration spreadsheet
 scope = ['https://spreadsheets.google.com/feeds',
@@ -16,33 +19,27 @@ scope = ['https://spreadsheets.google.com/feeds',
 credentials = ServiceAccountCredentials.from_json_keyfile_name('iiif-gspread-credentials.json', scope)
 gc = gspread.authorize(credentials)
 ss1 = gc.open_by_key('1YS7X6KOB2KytqAdxDjLqp54JHOW8KVT4CJv9ZIYOhas')
-sheet = ss1.get_worksheet(0)
-trc_accounts = set(sheet.col_values(4))
-trc_accounts.remove('')
-trc_accounts.remove('Github')
+trc_accounts = standing.getTRCAccounts(ss1.get_worksheet(0))
+activity = standing.buildStanding(ss1.get_worksheet(1), CURR_MILESTONE)
 
-sheet2 = ss1.get_worksheet(1)
-e_accounts = sheet2.col_values(1)
-e_okay = sheet2.col_values(2)
-eligibility = dict(zip(e_accounts, e_okay))
-if 'Name' in eligibility:
-	del eligibility['Name']
-if '' in eligibility:
-	del eligibility['']
-if 'total eligible:' in eligibility:
-	del eligibility['total eligible:']
+# Check all accounts are in standing list if not exit
+missingEligable = set(trc_accounts.keys()) - set(activity.keys())
+extraEligable = set(activity.keys()) - set(trc_accounts.keys())
+if len(missingEligable) > 0:
+    print ('To continue the following trc members need to have a row in the Eligability sheet:')
+    for member in missingEligable:
+        print (" * {} ".format(member))
+    print ('The following can be removed as they are no longer part of the TRC:')
+    for member in extraEligable:
+        print (" * {} ".format(member))
+    sys.exit()
 
-for (k,v) in eligibility.items():
-	eligibility[k] = bool(int(v))
-
-eligible = [x for (x,y) in eligibility.items() if y]
-eligible.sort()
-ineligible = [x for (x,y) in eligibility.items() if not y]
+(eligible, ineligible) = standing.getStatus(activity)
 
 # Now configure github and repo
 orgName = "iiif"
 repoName = "trc"
-userName = "azaroth42"
+userName = "glenrobson"
 pwh = open("token.txt")
 pw = pwh.read().strip()
 pwh.close()
@@ -71,11 +68,11 @@ for issue in issues:
 	comments = list(issue.get_comments())
 
 	votes = {'+1': set(), '-1': set(), '0': set()}
-
+	voteNotEligable = {}
 	for reaction in reactions:
 		who = reaction.user.login
 		if who in trc_accounts:
-			active[who] = 1
+			trc_accounts[who] = "1"
 			if who in eligible:
 				which = reaction.content  
 				# Agree: '+1' Disagree: '-1' +0: 'confused'
@@ -86,6 +83,8 @@ for issue in issues:
 					which = '+1'
 				if which in votes:
 					votes[which].add(who)
+			else:
+				voteNotEligable[who] = 1
 		else:
 			non_trc[who] = 1
 
@@ -107,6 +106,8 @@ for issue in issues:
 	issue_report.append("  +1: %s [%s]" % (len(votes['+1']), ' '.join(sorted(votes['+1']))))
 	issue_report.append("   0: %s [%s]" % (len(votes['0']), ' '.join(sorted(votes['0']))))
 	issue_report.append("  -1: %s [%s]" % (len(votes['-1']), ' '.join(sorted(votes['-1']))))
+	issue_report.append("  Not TRC: %s [%s]" % (len(non_trc), ' '.join(sorted(non_trc))))
+	issue_report.append("  Ineligible: %s [%s]" % (len(voteNotEligable), ' '.join(sorted(voteNotEligable))))
 	issue_report.append("")
 
 
@@ -134,10 +135,14 @@ for issue in issues:
 	for comment in comments:
 		who = comment.user.login
 		if who in trc_accounts:
-			active[who] = 1
+			trc_accounts[who] = "1"
 
-active_accounts = sorted(active.keys())
-inactive_accounts = sorted(list(set(trc_accounts) - set(active_accounts)))
+active_accounts = []
+for who in trc_accounts:
+    if trc_accounts[who] == '1':
+        active_accounts.append(who)
+
+inactive_accounts = sorted(list(set(trc_accounts.keys()) - set(active_accounts)))
 
 report.append("### Active on Issues")
 report.append(" ".join(active_accounts))
@@ -150,58 +155,10 @@ report.append(" ".join(sorted(non_trc.keys())))
 report.append(" ".join(sorted(ineligible)))
 report_str = '\n'.join(report)
 
+standing.updateStanding(ss1.get_worksheet(1), trc_accounts, activity, CURR_MILESTONE)
 if POST_TO_ISSUES:
 	issue = repo.get_issue(1)
 	issue.create_comment(report_str)
-
-	# find column for milestone in sheet2
-	headers = sheet2.row_values(1)
-	col = 1
-	for h in headers:
-		if h.isdigit() and int(h) == CURR_MILESTONE:
-			break
-		else:
-			col += 1
-
-	# Now walk through accounts and set column in ss
-	row = 0
-	for acc in e_accounts:
-		row += 1	
-		#print(acc)
-		if acc in active_accounts:
-			# set to 1
-			cell = sheet2.cell(row, col)
-			#print("%s to %s" % (cell.value, 1))
-			cell.value = 1
-		elif acc in inactive_accounts:
-			cell = sheet2.cell(row, col)
-			#print("%s to %s" % (cell.value, 0))
-			cell.value = 0
-		else:
-			# header row
-			continue
-
-		# And now update eligibility
-		valso = sheet2.row_values(row)
-		vals = [int(x) for x in valso[2:]]
-		acco = valso[0]
-		if acco != acc:
-			print("Uh-oh, order seems to have changed, bailing out")
-			raise
-
-		standing = 1
-		window = [1, vals[0], vals[1]]
-		for v in vals[2:]:
-			window = [window[1], window[2], v]
-			if standing == 1 and sum(window) == 0:
-				print("Setting %s to bad standing due to %s" % (acc, vals))
-				standing = 0
-			elif standing == 0 and sum(window) == 3:
-				print("Setting %s to good standing due to %s" % (acc,vals))
-				standing = 1
-		cell = sheet2.cell(row, 2)
-		cell.value = standing
-
 else:
 	print(report_str)
 

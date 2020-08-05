@@ -1,2 +1,4 @@
 ics
 python-dateutil
+pygithub
+gspread

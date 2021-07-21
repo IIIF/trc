@@ -24,5 +24,5 @@ So please add any comments either to the charter or in this issue. We will also 
 
  * If you approve with the charter after submitting any of your comments please vote +1 (thumbs up). 
  * If you don't think this group should go ahead vote -1 or thumbs down. 
- * If you have concerns with the group starting please add your comments to the doc or issue and vote with the confused face. 
+ * To abstain select the confused face.
 
